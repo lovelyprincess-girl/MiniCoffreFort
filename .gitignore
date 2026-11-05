@@ -16,5 +16,7 @@ logs.txt
 # Coffre-fort
 fichiers/
 
+mot_de_passe.json
+
 # Windows
 Thumbs.db

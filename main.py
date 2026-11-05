@@ -1,4 +1,13 @@
-# Importe les fonctions de gestion des fichiers
+
+import getpass
+import hashlib
+import secrets
+import hmac
+import json
+import os
+
+from datetime import datetime
+
 from modules.gestion_fichiers import (
     ajouter_fichier,
     lister_fichiers,
@@ -6,82 +15,142 @@ from modules.gestion_fichiers import (
     supprimer_fichier
 )
 
-# Permet de cacher le mot de passe lorsqu'on le tape
-import getpass
 
-# Permet d'enregistrer la date et l'heure dans les logs
-from datetime import datetime
-
-
-# Mot de passe du coffre-fort
-MOT_DE_PASSE = "1234"
-
-# Nombre maximum d'essais autorisés
+# Configuration
+FICHIER_MOT_DE_PASSE = "mot_de_passe.json"
 MAX_TENTATIVES = 3
+ITERATIONS = 600_000
 
 
-# Enregistre les actions dans le fichier logs.txt
+# Enregistre les actions dans les logs
 def log_action(message):
     with open("logs.txt", "a", encoding="utf-8") as f:
         f.write(f"{datetime.now()} - {message}\n")
 
 
-# Variables de contrôle
-tentatives = 0
-acces = False
+# Crée et enregistre le mot de passe
+def creer_mot_de_passe():
+
+    print("\n🔐 Première utilisation : crée ton mot de passe.")
+
+    while True:
+        mot_de_passe = getpass.getpass("Nouveau mot de passe : ")
+        confirmation = getpass.getpass("Confirme ton mot de passe : ")
+
+        if len(mot_de_passe) < 8:
+            print("❌ Le mot de passe doit contenir au moins 8 caractères.")
+            continue
+
+        if mot_de_passe != confirmation:
+            print("❌ Les deux mots de passe ne correspondent pas.")
+            continue
+
+        sel = secrets.token_bytes(16)
+
+        empreinte = hashlib.pbkdf2_hmac(
+            "sha256",
+            mot_de_passe.encode("utf-8"),
+            sel,
+            ITERATIONS
+        )
+
+        donnees = {
+            "sel": sel.hex(),
+            "empreinte": empreinte.hex()
+        }
+
+        with open(FICHIER_MOT_DE_PASSE, "w", encoding="utf-8") as f:
+            json.dump(donnees, f)
+
+        print("✅ Mot de passe enregistré.")
+        log_action("Mot de passe créé")
+        return True
 
 
-# Vérification du mot de passe
-while tentatives < MAX_TENTATIVES:
+# Vérifie le mot de passe
+def verifier_mot_de_passe(mot_de_passe):
 
-    password = getpass.getpass("🔒 Mot de passe : ")
+    with open(FICHIER_MOT_DE_PASSE, "r", encoding="utf-8") as f:
+        donnees = json.load(f)
 
-    if password == MOT_DE_PASSE:
-        print("✅ Accès autorisé")
-        log_action("Accès réussi au coffre")
-        acces = True
-        break
+    sel = bytes.fromhex(donnees["sel"])
+    empreinte_enregistree = bytes.fromhex(donnees["empreinte"])
 
-    else:
+    nouvelle_empreinte = hashlib.pbkdf2_hmac(
+        "sha256",
+        mot_de_passe.encode("utf-8"),
+        sel,
+        ITERATIONS
+    )
+
+    return hmac.compare_digest(
+        nouvelle_empreinte,
+        empreinte_enregistree
+    )
+
+
+# Vérification de l'accès au coffre
+def authentification():
+
+    if not os.path.exists(FICHIER_MOT_DE_PASSE):
+        creer_mot_de_passe()
+
+    tentatives = 0
+
+    while tentatives < MAX_TENTATIVES:
+
+        password = getpass.getpass("\n🔒 Mot de passe : ")
+
+        if verifier_mot_de_passe(password):
+            print("✅ Accès autorisé")
+            log_action("Accès réussi au coffre")
+            return True
+
         tentatives += 1
         print("❌ Mauvais mot de passe")
         log_action(f"Tentative échouée ({tentatives})")
 
-
-# Si les 3 essais sont utilisés, le programme s'arrête
-if not acces:
     print("🚫 Coffre verrouillé")
     log_action("Coffre verrouillé après 3 essais")
-    exit()
+    return False
 
 
-# Menu principal du coffre-fort
-while True:
+# Programme principal
+def main():
 
-    print("\n🔒 Mini Coffre-Fort")
-    print("1 - Ajouter un fichier")
-    print("2 - Lister les fichiers")
-    print("3 - Lire un fichier")
-    print("4 - Supprimer un fichier")
-    print("5 - Quitter")
+    if not authentification():
+        return
 
-    choix = input("Choix : ")
+    while True:
 
-    if choix == "1":
-        ajouter_fichier()
+        print("\n🔒 Mini Coffre-Fort")
+        print("1 - Ajouter un fichier")
+        print("2 - Lister les fichiers")
+        print("3 - Lire un fichier")
+        print("4 - Supprimer un fichier")
+        print("5 - Quitter")
 
-    elif choix == "2":
-        lister_fichiers()
+        choix = input("Choix : ")
 
-    elif choix == "3":
-        lire_fichier()
+        if choix == "1":
+            ajouter_fichier()
 
-    elif choix == "4":
-        supprimer_fichier()
+        elif choix == "2":
+            lister_fichiers()
 
-    elif choix == "5":
-        print("👋 Fin du programme")
-        break
+        elif choix == "3":
+            lire_fichier()
 
-    else:
-        print("❌ Choix invalide")
+        elif choix == "4":
+            supprimer_fichier()
+
+        elif choix == "5":
+            print("👋 Fin du programme")
+            break
+
+        else:
+            print("❌ Choix invalide")
+
+
+if __name__ == "__main__":
+    main()
