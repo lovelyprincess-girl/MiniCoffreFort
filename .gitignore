@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+
+# Configuration
+.vscode/
+.env
+
+# Secrets
+key.key
+
+# Journaux
+logs.txt
+*.log
+
+# Coffre-fort
+fichiers/
+
+# Windows
+Thumbs.db
